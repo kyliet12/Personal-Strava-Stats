@@ -29,7 +29,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <nav className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
+        <nav className="bg-orange-600 text-white px-6 py-4 flex justify-between items-center">
         <span className="font-bold text-lg">Personal Strava Stats</span>
         <div className="space-x-4">
           <Link href="/">
