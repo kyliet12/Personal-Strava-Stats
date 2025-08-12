@@ -38,6 +38,9 @@ export default function RootLayout({
           <Link href="/dashboard">
             Dashboard
           </Link>
+          <Link href="/activitymap">
+            Activity Map
+          </Link>
         </div>
       </nav>
         {children}
