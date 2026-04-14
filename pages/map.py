@@ -20,10 +20,7 @@ df = st.session_state.strava_data
 
 # add polyline data to df if not already present
 try:
-    # encoded polyline
-    df['summary_polyline'] = df['map'].str.get('summary_polyline')
-    # decode polyline
-    df['summary_polyline'] = df['summary_polyline'].apply(polyline.decode) 
+    
     # filter out bad rows
     df = df[df['summary_polyline'].apply(lambda x: isinstance(x, list) and len(x) > 0)]
 except KeyError:

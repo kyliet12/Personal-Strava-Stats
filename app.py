@@ -1,43 +1,9 @@
 import streamlit as st
-import requests
 import pandas as pd
-
-# Strava API credentials
-CLIENT_ID = st.secrets["STRAVA_CLIENT_ID"]
-CLIENT_SECRET = st.secrets["STRAVA_CLIENT_SECRET"]
-
-REDIRECT_URI = "http://localhost:8501/" 
-STRAVA_AUTH_URL = "https://www.strava.com/oauth/authorize"
-STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
-STRAVA_API_BASE = "https://www.strava.com/api/v3"
+from utils import get_login_url, exchange_token, fetch_activities, clean_activities, process_summary_stats
+from datetime import datetime
 
 st.title("Strava Activity Dashboard")
-
-def get_login_url():
-    """Generates the URL for the user to authenticate."""
-    return f"{STRAVA_AUTH_URL}?client_id={CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&approval_prompt=force&scope=read,activity:read_all"
-
-def exchange_token(code):
-    """Exchanges the authorization code for an access token."""
-    response = requests.post(
-        STRAVA_TOKEN_URL,
-        data={
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "code": code,
-            "grant_type": "authorization_code",
-        },
-    )
-    return response.json()
-
-def fetch_activities(access_token):
-    """Fetches the authenticated user's activities."""
-    headers = {"Authorization": f"Bearer {access_token}"}
-    # For a real app, you'd want to handle pagination to get more than 30 activities!
-    response = requests.get(f"{STRAVA_API_BASE}/athlete/activities", headers=headers)
-    return response.json()
-
-# --- App Logic ---
 
 # 1. Initialize session state to hold the access token
 if "access_token" not in st.session_state:
@@ -64,32 +30,70 @@ if st.session_state.access_token is None:
     st.markdown("Welcome! Please log in to view your stats.")
     login_url = get_login_url()
     st.link_button("Connect with Strava", login_url)
+    st.stop()  # Stop further execution until the user logs in
     
-else:
-    # User is logged in
-    st.success("Successfully connected to Strava!")
+
+# User is logged in
+st.success("Successfully connected to Strava!")
+
+if st.button("Log Out"):
+    st.session_state.access_token = None
+    st.rerun()
+
+# Fetch data
+df = None
+with st.spinner("Fetching your activities..."):
+    activities = fetch_activities(st.session_state.access_token)
     
-    if st.button("Log Out"):
-        st.session_state.access_token = None
-        st.rerun()
+    if activities:
+        # Convert JSON to a Pandas DataFrame for easy manipulation
+        df = pd.DataFrame(activities)
+    else:
+        st.info("No activities found!")
 
-    # Fetch and display data
-    df = None
-    with st.spinner("Fetching your activities..."):
-        activities = fetch_activities(st.session_state.access_token)
-        
-        if activities:
-            # Convert JSON to a Pandas DataFrame for easy manipulation
-            df = pd.DataFrame(activities)
-            
-            # Show raw data (you can replace this with your notebook visuals)
-            st.subheader("Recent Activities")
-            st.dataframe(df[['name', 'distance', 'moving_time', 'type', 'start_date_local']])
-        else:
-            st.info("No activities found!")
+# Clean df (convert distance to km, moving_time to minutes, etc.)
+df = clean_activities(df)
 
-    # Clean df (convert distance to km, moving_time to minutes, etc.)
+# save df to session state for use in other pages
+if df is not None:
+    st.session_state.strava_data = df
 
-    # save df to session state for use in other pages
-    if df is not None:
-        st.session_state.strava_data = df
+# Main page content
+stats = process_summary_stats(df) 
+# --- Section 1: Running Focus ---
+st.markdown("### 🏃‍♀️ Year-to-Date Running")
+
+# Use a container to group these nicely
+with st.container(border=True):
+    r1_col1, r1_col2, r1_col3, r1_col4 = st.columns(4)
+    
+    with r1_col1:
+        st.metric("Total YTD Miles", f"{stats['ytd_run_miles']:,.1f} mi")
+    with r1_col2:
+        st.metric("Days Run", f"{stats['days_run']} days", help="Total unique days you ran this year")
+    with r1_col3:
+        st.metric("Avg Weekly Mileage", f"{stats['avg_weekly_miles']:.1f} mi/wk")
+    with r1_col4:
+        # You could add a delta here comparing to last month if you calculate it!
+        st.metric(f"{datetime.now().strftime('%B')} Mileage", f"{stats['month_run_miles']:.1f} mi")
+
+st.write("") # Spacer
+
+# --- Section 2: Exploration & Multisport ---
+st.markdown("### 🌍 Exploration & Multisport")
+
+with st.container(border=True):
+    r2_col1, r2_col2, r2_col3 = st.columns(3)
+    
+    with r2_col1:
+        st.metric("Lifetime Bike Rides", f"{stats['total_bike_rides']}", 
+                    delta=f"{stats['total_bike_miles']:,.0f} miles total", 
+                    delta_color="off") # 'off' makes the delta grey instead of green/red
+    
+    with r2_col2:
+        # The cities metric
+        st.metric("Cities Explored", f"{stats['cities_count']}", help="Unique cities or timezones you've logged activities in.")
+    
+    with r2_col3:
+        # Bonus fun metric
+        st.metric("Total Vert Climbed", f"{stats['total_vert_ft']:,.0f} ft")
