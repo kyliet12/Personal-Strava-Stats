@@ -105,9 +105,15 @@ with st.container(border=True):
     with r1_col3:
         st.metric("Avg Weekly Mileage", f"{stats['avg_weekly_miles']:.1f} mi/wk")
     with r1_col4:
-        st.metric(f"{datetime.now().strftime('%B')} Mileage", f"{stats['month_run_miles']:.1f} mi",
-                  delta=f"{stats['month_run_miles'] - stats['last_month_run_miles']:.1f} mi",
-                  delta_color="off")
+        # check that metrics are available
+        if 'last_month_run_miles' not in stats:
+            st.metric(f"{datetime.now().strftime('%B')} Mileage", f"{stats['month_run_miles']:.1f} mi")
+            # print last_month_run_miles to the console
+            print(f"Last month run miles: {stats['last_month_run_miles']}")
+        else:
+            st.metric(f"{datetime.now().strftime('%B')} Mileage", f"{stats['month_run_miles']:.1f} mi",
+                      delta=f"{stats['month_run_miles'] - stats['last_month_run_miles']} mi",
+                      delta_color="off")
 st.write("") # Spacer
 
 

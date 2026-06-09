@@ -65,45 +65,6 @@ def fetch_activities(access_token):
 
     return all_activities
 
-# @st.cache_data
-# def get_city_from_coords(df):
-#     """Uses reverse_geocoder to reverse geocode coordinates into a city name."""
-#     # 1. Filter out activities that don't have valid starting coordinates
-#     valid_coords_mask = df['start_latlng'].notna() & (df['start_latlng'].str.len() == 2)
-    
-#     # If no valid coordinates exist, just return the dataframe
-#     if not valid_coords_mask.any():
-#         df['start_city'] = "Unknown Location"
-#         return df
-        
-#     # 2. Extract all valid coordinates into a list of tuples: [(lat1, lon1), (lat2, lon2), ...]
-#     coords_list = df.loc[valid_coords_mask, 'start_latlng'].apply(tuple).tolist()
-    
-#     # 3. Batch reverse-geocode explicitly in single-threaded mode
-#     # Bypassing rg.search() avoids the multiprocessing caching bug
-#     geocoder = rg.RGeocoder(mode=1, verbose=False)
-#     results = geocoder.query(coords_list)
-
-#     # 4. Format the results into "City, State"
-#     formatted_cities = []
-#     for res in results:
-#         city = res.get('name', 'Unknown')
-#         state = res.get('admin1', '') # admin1 usually represents the state/province
-        
-#         if state:
-#             formatted_cities.append(f"{city}, {state}")
-#         else:
-#             formatted_cities.append(city)
-            
-#     # 5. Assign the results back to the dataframe
-#     # Initialize the column with defaults first
-#     df['start_city'] = "Unknown Location" 
-#     # Map the formatted cities only to the rows that had valid coordinates
-#     df.loc[valid_coords_mask, 'start_city'] = formatted_cities
-    
-#     return df
-
-
 def clean_activities(df):
     """Cleans the activities DataFrame."""
     if df is None or df.empty:
@@ -178,6 +139,7 @@ def process_summary_stats(df):
     runs_last_month = runs_this_year[runs_this_year['start_month'] == current_month - 1]
     runs_last_month = runs_last_month[runs_last_month['start_day'] <= current_day]
     month_run_miles = runs_this_month['distance_miles'].sum()
+    last_month_run_miles = runs_last_month['distance_miles'].sum()
 
     # --- Multisport & Exploration Metrics ---
     # 5. Total Bikes (Rides)
@@ -199,7 +161,7 @@ def process_summary_stats(df):
         "ytd_run_miles": ytd_run_miles,
         "avg_weekly_miles": avg_weekly_miles,
         "month_run_miles": month_run_miles,
-        "last_month_run_miles": runs_last_month['distance_miles'].sum(),
+        "last_month_run_miles": last_month_run_miles,
         "total_bike_rides": total_bike_rides,
         "total_bike_miles": total_bike_miles,
         "cities_count": cities_count,
