@@ -79,8 +79,10 @@ def get_city_from_coords(df):
     # 2. Extract all valid coordinates into a list of tuples: [(lat1, lon1), (lat2, lon2), ...]
     coords_list = df.loc[valid_coords_mask, 'start_latlng'].apply(tuple).tolist()
     
-    # 3. Batch reverse-geocode ALL of them in milliseconds
-    results = rg.search(coords_list, mode=1) # mode=1 for single-threaded mode
+    # 3. Batch reverse-geocode explicitly in single-threaded mode
+    # Bypassing rg.search() avoids the multiprocessing caching bug
+    geocoder = rg.RGeocoder(mode=1, verbose=False)
+    results = geocoder.query(coords_list)
     
     # 4. Format the results into "City, State"
     formatted_cities = []
