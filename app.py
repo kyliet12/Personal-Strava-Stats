@@ -30,7 +30,7 @@ if "code" in st.query_params and not st.session_state.access_token:
 # 3. Main View Routing
 if st.session_state.access_token is None:
     # User is not logged in
-    st.markdown("Welcome! Please set your thresholds in the sidebar, then log in to view your stats.")
+    st.markdown("Welcome! Please log in to view your stats.")
     login_url = get_login_url()
     st.link_button("Connect with Strava", login_url)
     st.stop()  # Stop further execution until the user logs in
