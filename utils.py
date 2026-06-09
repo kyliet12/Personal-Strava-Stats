@@ -46,11 +46,18 @@ def fetch_activities(access_token):
     
     while True:
         response = requests.get(activities_url, headers=headers, params=param)
+        # Check for API errors
+        if response.status_code != 200:
+            st.error(f"Strava API Error: {response.json().get('message', 'Rate limit exceeded or invalid token.')}")
+            break
+
         activities = response.json()
-        if not activities:
+        # Ensure we actually got a list back before proceeding
+        if not activities or not isinstance(activities, list):
             break
         # stop once we hit the previous year's activities
         if pd.to_datetime(activities[-1]['start_date_local']).year < pd.Timestamp.now().year - 1:
+            all_activities.extend(activities) # Make sure to keep the final batch!
             break
         all_activities.extend(activities)
         request_page_number += 1
@@ -73,7 +80,7 @@ def get_city_from_coords(df):
     coords_list = df.loc[valid_coords_mask, 'start_latlng'].apply(tuple).tolist()
     
     # 3. Batch reverse-geocode ALL of them in milliseconds
-    results = rg.search(coords_list)
+    results = rg.search(coords_list, mode=1) # mode=1 for single-threaded mode
     
     # 4. Format the results into "City, State"
     formatted_cities = []
