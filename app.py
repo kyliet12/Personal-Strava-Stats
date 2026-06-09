@@ -112,7 +112,7 @@ with st.container(border=True):
             print(f"Last month run miles: {stats['last_month_run_miles']}")
         else:
             st.metric(f"{datetime.now().strftime('%B')} Mileage", f"{stats['month_run_miles']:.1f} mi",
-                      delta=f"{stats['month_run_miles'] - stats['last_month_run_miles']} mi",
+                      delta=f"{(stats['month_run_miles'] - stats['last_month_run_miles']):.1f} mi",
                       delta_color="off")
 st.write("") # Spacer
 
@@ -153,7 +153,8 @@ with st.container(border=True):
     with r2_col2:
         st.metric("YTD Bike Rides", f"{stats['total_bike_rides']}", 
                     delta=f"{stats['total_bike_miles']:,.0f} miles total", 
-                    delta_color="off") # 'off' makes the delta grey instead of green/red
+                    delta_color="off",
+                    delta_arrow="off") # 'off' makes the delta grey instead of green/red
     with r2_col3:
         # Bonus fun metric
         st.metric("Total Vert Climbed", f"{stats['total_vert_ft']:,.0f} ft")

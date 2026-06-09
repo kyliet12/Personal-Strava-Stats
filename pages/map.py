@@ -1,8 +1,23 @@
 import streamlit as st
-import pandas as pd
 import folium
 from streamlit_folium import st_folium
-import polyline
+import statistics
+
+def get_frequent_center(polylines):
+    x, y = [], []
+    for polyline in polylines:
+        # Ensure the polyline isn't empty or invalid
+        if isinstance(polyline, list) and len(polyline) > 0:
+            for coord in polyline:
+                x.append(coord[0])
+                y.append(coord[1])
+                
+    # Fallback coordinates if geometry fails
+    if not x or not y:
+        return [47.6555, -122.3131] 
+        
+    # Use median to center on the most dense area of points
+    return [statistics.median(x), statistics.median(y)]
 
 # --- Page Config ---
 st.set_page_config(page_title="Adventure Map", page_icon="🗺️", layout="wide")
@@ -53,22 +68,8 @@ if 'summary_polyline' in filtered_df.columns:
         # Color scheme mapping
         color_map = {'Ride': 'red', 'Run': 'blue', 'Walk': 'purple'}
         
-        # Centroid calculation to center the map
-        def centroid(polylines):
-            x, y = [], []
-            for polyline in polylines:
-                # Ensure the polyline isn't empty or invalid
-                if isinstance(polyline, list) and len(polyline) > 0:
-                    for coord in polyline:
-                        x.append(coord[0])
-                        y.append(coord[1])
-            # Fallback coordinates if geometry fails
-            if not x or not y:
-                return [47.6555, -122.3131] 
-            return [(min(x)+max(x))/2, (min(y)+max(y))/2]
-
         # Initialize the map
-        m = folium.Map(location=centroid(activities_map['summary_polyline']), zoom_start=10)
+        m = folium.Map(location=get_frequent_center(activities_map['summary_polyline']), zoom_start=10)
         
         # Plot all activities
         for _, row in activities_map.iterrows():
