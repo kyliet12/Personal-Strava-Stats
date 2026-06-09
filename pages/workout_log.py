@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
 from utils import classify_and_extract 
-# --- Page Config ---
+
 st.set_page_config(page_title="Workout Log", page_icon="📝", layout="wide")
 
-# --- 1. Global Settings & Sidebar (Renders immediately) ---
-# Initialize defaults if they don't exist yet
+######
+# Sidebar Pace Panel
+######
 if "long_run_thresh" not in st.session_state:
     st.session_state.long_run_thresh = 6.0
 if "pace_min" not in st.session_state:
@@ -44,7 +45,10 @@ with st.sidebar:
             step=1
         )
 
-st.title("Workout Journal 📝")
+######
+# Main Log
+######
+st.title("Running Journal 📝")
 
 if "strava_data" not in st.session_state:
     st.warning("No data found! Please log in on the Home page.")
@@ -52,29 +56,19 @@ if "strava_data" not in st.session_state:
 
 df = st.session_state.strava_data.copy()
 
-# --- Mocking the Detailed Fetch ---
-# Since fetching detailed descriptions requires API calls, we simulate it here.
-# In production, you would run your heuristic filter, call GET /activities/{id}, 
-# and merge the 'description' column into your dataframe.
 if 'description' not in df.columns:
     st.info("To see your captions, ensure your data pipeline is fetching the 'description' field from the detailed activities endpoint for your workout days.")
     # Stop execution safely if the column isn't there yet
     st.stop() 
 
-# 1. Isolate all runs and sort chronologically
+# Get only runs
 runs_df = df[df['type'] == 'Run'].copy()
 runs_df['date'] = pd.to_datetime(runs_df['start_date_local'])
 runs_df = runs_df.sort_values('date', ascending=False)
 
-# 2. Apply the classifier to EVERY run
-# 1. Convert the user's MM:SS input into a decimal so the math works
+# Apply classifier
 dynamic_aerobic_decimal = st.session_state.pace_min + (st.session_state.pace_sec / 60.0)
-
-# Grab the long run threshold directly
 dynamic_long_run = st.session_state.long_run_thresh
-
-# 2. The Lambda Bridge
-# This passes the row data AND your dynamic thresholds into the function
 parsed_data = df.apply(
     lambda row: classify_and_extract(
         row=row, 
@@ -89,12 +83,10 @@ runs_df['parsed_emoji'] = parsed_data.apply(lambda x: x['emoji'])
 runs_df['parsed_intervals'] = parsed_data.apply(lambda x: x['intervals'])
 runs_df['formatted_notes'] = parsed_data.apply(lambda x: x['notes'])
 
-# 3. Filter for the Journal
 workouts_df = runs_df.copy()
-# Limit to last 50 runs
-workouts_df = workouts_df.head(50)
-# --- Build the UI ---
-st.markdown("Details for your last 50 runs")
+
+# Build the UI
+st.markdown(f"Details for your last {workouts_df.shape[0]} runs")
 st.divider()
 
 if workouts_df.empty:
@@ -109,12 +101,11 @@ else:
         pace_min = int(1609.34 / (row['average_speed'] * 60))
         pace_sec = int(((1609.34 / (row['average_speed'] * 60)) - pace_min) * 60)
         
-        # 1. Grab the overall HR for the run
+        # Grab the overall HR for the run
         avg_hr = row.get('average_heartrate', 0)
         has_hr = row.get('has_heartrate', False)
-        
-        # 2. Add it to the Expander Header
         hr_header = f" | ❤️ {int(avg_hr)} bpm" if has_hr else ""
+
         header_text = f"{row['parsed_emoji']} **{date_str}** | {name} | {dist:.2f} mi @ {pace_min}:{pace_sec:02d}/mi{hr_header}"
 
         with st.expander(header_text):
@@ -130,7 +121,7 @@ else:
                 has_splits = splits_str and splits_str.lower() != 'nan'
                 
                 if not raw_notes or raw_notes.lower() == 'nan':
-                    # Create a dynamic HR string for the placeholder sentence
+                    # If no description, create custom caption
                     hr_sentence = f", averaging {int(avg_hr)} bpm" if has_hr else ""
                     
                     if row['parsed_type'] == "Long Run":
@@ -149,14 +140,12 @@ else:
                         st.write(f"*{placeholder}*")
                         
                 else:
-                    # Render your actual written caption using the blockquote fix
+                    # Display description
                     paragraphs = raw_notes.split('\n\n')
                     quoted_notes = "\n>\n".join([f"> *{p}*" for p in paragraphs if p.strip()])
                     st.markdown(quoted_notes)
                     
-                    # ---> NEW: Append the splits below your written caption
                     if has_splits:
-                        # Adding an extra newline (\n) gives a nice buffer below the gray blockquote line
                         st.markdown(f"\n**Splits:** {splits_str}")
             with col2:
                 st.write(f"**Classification:** {row['parsed_type']}")
@@ -164,6 +153,6 @@ else:
                 if row['parsed_intervals']:
                     st.write(f"**Structure:** {row['parsed_intervals']}")
                 
-                # You can add heart rate data here if available
                 if row.get('has_heartrate'):
                     st.write(f"**Max HR:** {row.get('max_heartrate', 0):.0f} bpm")
+                    st.write(f"**Avg HR:** {row.get('average_heartrate', 0):.0f} bpm")

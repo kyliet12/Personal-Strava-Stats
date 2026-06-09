@@ -8,11 +8,14 @@ import plotly.express as px
 
 st.title("Strava Activity Dashboard")
 
-# 1. Initialize session state to hold the access token
+##########
+# Login
+##########
+
 if "access_token" not in st.session_state:
     st.session_state.access_token = None
 
-# 2. Check if the user is returning from Strava with an authorization code
+# Check if the user is returning from Strava with an authorization code
 if "code" in st.query_params and not st.session_state.access_token:
     auth_code = st.query_params["code"]
     
@@ -27,7 +30,7 @@ if "code" in st.query_params and not st.session_state.access_token:
         else:
             st.error("Failed to authenticate. Please try again.")
 
-# 3. Main View Routing
+# Opening Page
 if st.session_state.access_token is None:
     # User is not logged in
     st.markdown("Welcome! Please log in to view your stats.")
@@ -43,7 +46,9 @@ if st.button("Log Out"):
     st.session_state.access_token = None
     st.rerun()
 
-# Pull your ID securely from the environment configuration
+##########
+# Load Data
+##########
 MY_STRAVA_ID = st.secrets["MY_STRAVA_ID"]
 
 # --- Smart Caching & VIP Routing ---
@@ -76,17 +81,20 @@ if "strava_data" not in st.session_state:
 
         # Save the fully enriched dataframe to session state
         st.session_state.strava_data = df
-
 else:
     # If the data is already in session state, load it instantly without hitting the API
     df = st.session_state.strava_data
 
-# Main page content
+# Generate Summary Statistics
 stats = process_summary_stats(df)
-# --- Section 1: Running Focus ---
+
+
+##########
+# Home Page Visuals
+##########
+
 st.markdown("### 🏃‍♀️ Year-to-Date Running")
 
-# Use a container to group these nicely
 with st.container(border=True):
     r1_col1, r1_col2, r1_col3, r1_col4 = st.columns(4)
     
@@ -97,17 +105,15 @@ with st.container(border=True):
     with r1_col3:
         st.metric("Avg Weekly Mileage", f"{stats['avg_weekly_miles']:.1f} mi/wk")
     with r1_col4:
-        # You could add a delta here comparing to last month if you calculate it!
-        st.metric(f"{datetime.now().strftime('%B')} Mileage", f"{stats['month_run_miles']:.1f} mi")
-
+        st.metric(f"{datetime.now().strftime('%B')} Mileage", f"{stats['month_run_miles']:.1f} mi",
+                  delta=f"{stats['month_run_miles'] - stats['last_month_run_miles']:.1f} mi",
+                  delta_color="off")
 st.write("") # Spacer
+
 
 st.markdown("### 🏆 Year-to-Date Top Times")
 
-# List of the columns we just created
 pr_columns = ["pr_800m", "pr_1_mile", "pr_2_mile", "pr_5k", "pr_10k", "pr_10_mile"]
-
-# Create a dictionary to hold the fastest time for each distance
 ytd_prs = {}
 
 for col in pr_columns:
@@ -124,7 +130,6 @@ for col in pr_columns:
         
         ytd_prs[clean_label] = f"{minutes}:{seconds:02d}"
 
-# Display in Streamlit using columns
 if ytd_prs:
     pr_cols = st.columns(len(ytd_prs))
     for i, (distance, time_str) in enumerate(ytd_prs.items()):
@@ -132,9 +137,8 @@ if ytd_prs:
 else:
     st.info("No best efforts logged yet!")
 
-# --- Section 2: Exploration & Multisport ---
-st.markdown("### 🌍 Exploration & Multisport")
 
+st.markdown("### 🌍 Exploration & Multisport")
 with st.container(border=True):
     r2_col1, r2_col2, r2_col3 = st.columns(3)
     
@@ -151,7 +155,6 @@ with st.container(border=True):
 
 st.markdown("### 📅 Activity Log")
 
-# 1. Define your color palette 
 activity_colors = {
     'Run': '#fc4c02',    
     'Ride': '#636efa',   
@@ -161,10 +164,7 @@ activity_colors = {
     'BackcountrySki': '#1e90ff' 
 }
 
-# Ensure date is a proper datetime object for weekly grouping
 df['date_obj'] = pd.to_datetime(df['start_date_local'])
-
-# 2. Format the Individual Activity Tokens
 calendar_events = []
 
 for _, row in df.iterrows():
@@ -197,7 +197,6 @@ for _, row in df.iterrows():
     })
 
 # 3. Calculate and Inject Weekly Summary Tokens
-# Group by weeks ending on Sunday ('W-SUN')
 for week_end, group in df.groupby(pd.Grouper(key='date_obj', freq='W-SUN')):
     # Calculate totals
     total_dist_meters = group['distance'].sum()
@@ -232,7 +231,6 @@ for week_end, group in df.groupby(pd.Grouper(key='date_obj', freq='W-SUN')):
             "classNames": ["weekly-summary-token"] 
         })
 
-# 4. Configure the Calendar UI Options
 calendar_options = {
     "headerToolbar": {
         "left": "today prev,next",
@@ -244,8 +242,6 @@ calendar_options = {
     "navLinks": True,
     "height": 650, 
 }
-
-# 5. Add Custom CSS
 custom_css = """
     .fc-event {
         border-radius: 4px;
@@ -269,7 +265,6 @@ custom_css = """
     }
 """
 
-# 6. Render the Calendar
 calendar(
     events=calendar_events, 
     options=calendar_options, 

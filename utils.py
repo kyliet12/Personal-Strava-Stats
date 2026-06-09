@@ -157,9 +157,11 @@ def process_summary_stats(df):
     current_year = datetime.now().year
     current_month = datetime.now().month
     current_week = datetime.now().isocalendar()[1] # Gets current week number out of 52
+    current_day = datetime.now().day
 
     # --- Running Metrics (Current Year) ---
     runs_this_year = df[(df['type'] == 'Run') & (df['start_year'] == current_year)]
+    runs_this_year['day_of_month'] = runs_this_year['start_day']
     
     # 1. Days run out of the year
     days_run = runs_this_year['start_day'].nunique()
@@ -173,6 +175,8 @@ def process_summary_stats(df):
     
     # 4. Current month mileage
     runs_this_month = runs_this_year[runs_this_year['start_month'] == current_month]
+    runs_last_month = runs_this_year[runs_this_year['start_month'] == current_month - 1]
+    runs_last_month = runs_last_month[runs_last_month['start_day'] <= current_day]
     month_run_miles = runs_this_month['distance_miles'].sum()
 
     # --- Multisport & Exploration Metrics ---
@@ -195,6 +199,7 @@ def process_summary_stats(df):
         "ytd_run_miles": ytd_run_miles,
         "avg_weekly_miles": avg_weekly_miles,
         "month_run_miles": month_run_miles,
+        "last_month_run_miles": runs_last_month['distance_miles'].sum(),
         "total_bike_rides": total_bike_rides,
         "total_bike_miles": total_bike_miles,
         "cities_count": cities_count,

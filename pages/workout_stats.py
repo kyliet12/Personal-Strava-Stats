@@ -4,8 +4,9 @@ import plotly.express as px
 from utils import classify_and_extract
 import numpy as np
 
-# --- 1. Global Settings & Sidebar (Renders immediately) ---
-# Initialize defaults if they don't exist yet
+######
+# Sidebar Pace Panel
+######
 if "long_run_thresh" not in st.session_state:
     st.session_state.long_run_thresh = 6.0
 if "pace_min" not in st.session_state:
