@@ -13,7 +13,7 @@ import time
 CLIENT_ID = st.secrets["STRAVA_CLIENT_ID"]
 CLIENT_SECRET = st.secrets["STRAVA_CLIENT_SECRET"]
 
-REDIRECT_URI = "http://localhost:8501/" 
+REDIRECT_URI = "https://kt-strava-stats.streamlit.app/" 
 STRAVA_AUTH_URL = "https://www.strava.com/oauth/authorize"
 STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 STRAVA_API_BASE = "https://www.strava.com/api/v3"
