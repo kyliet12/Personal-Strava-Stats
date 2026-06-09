@@ -4,6 +4,10 @@ import polyline
 import streamlit as st
 import requests
 import pandas as pd
+import re
+import os
+import time
+
 
 # Strava API credentials
 CLIENT_ID = st.secrets["STRAVA_CLIENT_ID"]
@@ -93,6 +97,20 @@ def get_city_from_coords(df):
 
 def clean_activities(df):
     """Cleans the activities DataFrame."""
+    if df is None or df.empty:
+        return df
+
+    # 1. Extract the polyline string out of the 'map' dictionary
+    if 'map' in df.columns:
+        # If you haven't already extracted it, grab the string
+        df['summary_polyline'] = df['map'].apply(lambda x: x.get('summary_polyline') if isinstance(x, dict) else None)
+        # Drop the original unhashable dictionary column
+        df = df.drop(columns=['map'])
+    
+    # 2. Drop other known unhashable Strava dictionary columns
+    if 'athlete' in df.columns:
+        df = df.drop(columns=['athlete'])
+
     # unit conversions
     df['start_date_local'] = pd.to_datetime(df['start_date_local'], errors='coerce')
     df['start_time'] = df['start_date_local'].dt.time
@@ -113,8 +131,8 @@ def clean_activities(df):
     df['distance_miles'] = df['distance'] / 1609.344
     df['elevation_gain_ft'] = df['total_elevation_gain'] * 3.28084
     # map 
-    # encoded polyline
-    df['summary_polyline'] = df['map'].str.get('summary_polyline')
+    # encoded polyline - get earlier in function
+    # df['summary_polyline'] = df['map'].str.get('summary_polyline')
     # decode polyline
     df['summary_polyline'] = df['summary_polyline'].apply(polyline.decode) 
     df = get_city_from_coords(df)
@@ -170,3 +188,152 @@ def process_summary_stats(df):
         "cities_count": cities_count,
         "total_vert_ft": total_vert_ft
     }
+
+def classify_and_extract(row: pd.Series, long_run_thresh: float = 6.5, aerobic_thresh_decimal: float = 8.25) -> dict:
+    """
+    Classifies a run based on distance, pace, and simple caption heuristics.
+    """
+    description = str(row.get('description', ''))
+    description_lower = description.lower()
+    
+    # 1. Calculate metrics for the heuristics
+    raw_dist = row.get('distance', 0)
+    distance_mi = raw_dist * 0.000621371 if raw_dist > 100 else raw_dist
+    
+    avg_speed = row.get('average_speed', 0)
+    # Convert m/s to min/mile (decimal)
+    pace_decimal = 1609.34 / (avg_speed * 60) if avg_speed > 0 else 99 
+    
+    # 2. Format the notes for Streamlit UI (double newlines)
+    formatted_notes = description.replace('\n', '\n\n')
+    
+    details = {
+        "type": "Easy", 
+        "emoji": "🐢", # Fallback emoji
+        "intervals": None, 
+        "notes": formatted_notes
+    }
+
+    # --- 3. The Heuristic Waterfall ---
+
+    # Condition A: Workout (Contains wu and cd)
+    if 'wu' in description_lower and 'cd' in description_lower:
+        details["type"] = "Workout"
+        details["emoji"] = "🔥"
+        
+        # Still attempt to grab that specific line so you can see the 
+        # interval structure at a glance in the UI
+        lines = description_lower.split('\n')
+        for line in lines:
+            if 'wu' in line and 'cd' in line:
+                details["intervals"] = line.strip().title()
+                break
+        return details
+
+    # Condition B: Long Run (> 6 miles)
+    if distance_mi > long_run_thresh:
+        details["type"] = "Long Run"
+        details["emoji"] = "🗺️" 
+        return details
+
+    # Condition C: Aerobic vs Easy (Threshold: 8:15 min/mile)
+    if pace_decimal < aerobic_thresh_decimal:
+        details["type"] = "Aerobic"
+        details["emoji"] = "🏃‍♀️"
+    else:
+        details["type"] = "Easy"
+        details["emoji"] = "🐢"
+        
+    return details
+
+def sync_detailed_activities(summary_df: pd.DataFrame, access_token: str, cache_file: str = "workout_details.csv", use_cache: bool = True) -> pd.DataFrame:
+    """
+    Syncs descriptions, splits, and PRs. 
+    If use_cache is True, writes to a local CSV. Otherwise, operates in memory.
+    """
+    runs_df = summary_df[summary_df['type'] == 'Run'].copy()
+    
+    # 1. Setup the target dataframe based on the cache toggle
+    if use_cache and os.path.exists(cache_file):
+        cache_df = pd.read_csv(cache_file)
+    else:
+        cache_df = pd.DataFrame(columns=[
+            "id", "description", "splits",
+            "pr_800m", "pr_1_mile", "pr_2_mile", 
+            "pr_5k", "pr_10k", "pr_10_mile"
+        ])
+        
+    # 2. Determine which IDs need fetching
+    if use_cache:
+        cached_ids = set(cache_df['id'].tolist())
+        missing_ids = runs_df[~runs_df['id'].isin(cached_ids)]['id'].tolist()
+    else:
+        # In memory-only mode, we must fetch everything passed in the summary_df
+        missing_ids = runs_df['id'].tolist()
+    
+    new_data = []
+    if missing_ids:
+        with st.spinner(f"Fetching {len(missing_ids)} detailed records from Strava..."):
+            headers = {"Authorization": f"Bearer {access_token}"}
+            target_efforts = {"800m": "pr_800m", "1 mile": "pr_1_mile", "2 mile": "pr_2_mile", 
+                              "5K": "pr_5k", "10K": "pr_10k", "10 mile": "pr_10_mile"}
+            
+            for act_id in missing_ids:
+                url = f"https://www.strava.com/api/v3/activities/{act_id}"
+                response = requests.get(url, headers=headers)
+                
+                if response.status_code == 200:
+                    detail_json = response.json()
+                    
+                    row_data = {
+                        "id": detail_json.get("id"),
+                        "description": detail_json.get("description", "") 
+                    }
+                    
+                    # Extract PRs
+                    best_efforts = detail_json.get("best_efforts", [])
+                    for effort in best_efforts:
+                        effort_name = effort.get("name")
+                        if effort_name in target_efforts:
+                            column_name = target_efforts[effort_name]
+                            row_data[column_name] = effort.get("elapsed_time")
+                            
+                    # Extract Splits
+                    splits_standard = detail_json.get("splits_standard", [])
+                    split_strings = []
+                    
+                    for split in splits_standard:
+                        split_dist_mi = split.get("distance", 0) * 0.000621371
+                        if split_dist_mi > 0.1:
+                            pace_decimal = (split.get("moving_time", 0) / 60) / split_dist_mi
+                            p_min = int(pace_decimal)
+                            p_sec = int((pace_decimal - p_min) * 60)
+                            
+                            split_hr = split.get("average_heartrate")
+                            if split_hr:
+                                split_strings.append(f"{p_min}:{p_sec:02d} ({int(split_hr)} bpm)")
+                            else:
+                                split_strings.append(f"{p_min}:{p_sec:02d}")
+                            
+                    row_data["splits"] = ", ".join(split_strings)
+
+                    new_data.append(row_data)
+                    
+                elif response.status_code == 429:
+                    st.warning("Strava API rate limit exceeded! Stopping fetch.")
+                    break 
+                    
+                time.sleep(0.5)
+                
+    # 3. Append, conditionally save, and merge
+    if new_data:
+        new_df = pd.DataFrame(new_data)
+        cache_df = pd.concat([cache_df, new_df], ignore_index=True).drop_duplicates(subset=['id'], keep='last')
+        
+        # Only write to the hard drive if VIP mode is engaged
+        if use_cache:
+            cache_df.to_csv(cache_file, index=False)
+        
+    merged_df = summary_df.merge(cache_df, on='id', how='left')
+    
+    return merged_df

@@ -1,3 +1,4 @@
 keys.py
 .streamlit/secrets.toml
 /__pycache__
+workout_details.csv
