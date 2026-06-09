@@ -5,6 +5,7 @@ from datetime import datetime
 from streamlit_calendar import calendar
 import plotly.express as px
 
+
 st.title("Strava Activity Dashboard")
 
 # 1. Initialize session state to hold the access token
@@ -42,39 +43,46 @@ if st.button("Log Out"):
     st.session_state.access_token = None
     st.rerun()
 
-# Fetch data
-df = None
-with st.spinner("Fetching your activities..."):
-    activities = fetch_activities(st.session_state.access_token)
-    
-    if activities:
-        # Convert JSON to a Pandas DataFrame for easy manipulation
-        df = pd.DataFrame(activities)
-    else:
-        st.info("No activities found!")
-
+# Pull your ID securely from the environment configuration
 MY_STRAVA_ID = st.secrets["MY_STRAVA_ID"]
-# Clean df (convert distance to km, moving_time to minutes, etc.)
-df = clean_activities(df)
 
-# ---> NEW: Sync the detailed descriptions before saving to session state
-if df is not None:
-    # --- The VIP Routing ---
-    if st.session_state.get("athlete_id") == MY_STRAVA_ID:
-        # VIP Mode: You get full history and CSV caching
-        df = sync_detailed_activities(df, st.session_state.access_token, use_cache=True)
-    else:
-        # Guest Mode: Cap at 50 activities to protect limits, operate purely in memory
-        df = df.head(50).copy()
-        df = sync_detailed_activities(df, st.session_state.access_token, use_cache=False)
+# --- Smart Caching & VIP Routing ---
+# Only run the heavy API calls if the data isn't already saved in the session
+if "strava_data" not in st.session_state:
+    
+    df = None
+    with st.spinner("Fetching your activities..."):
+        activities = fetch_activities(st.session_state.access_token)
         
-        st.toast("Guest Mode: Dynamically fetched your 50 most recent detailed runs.", icon="👋")
+        if activities:
+            df = pd.DataFrame(activities)
+        else:
+            st.info("No activities found!")
 
-    # Save the fully enriched dataframe to session state
-    st.session_state.strava_data = df
+    # Clean df
+    df = clean_activities(df)
+
+    # Sync detailed descriptions and route VIPs
+    if df is not None:
+        # Cast both IDs to strings to prevent type-mismatch bugs
+        if str(st.session_state.get("athlete_id")) == str(MY_STRAVA_ID):
+            # VIP Mode
+            df = sync_detailed_activities(df, st.session_state.access_token, use_cache=True)
+        else:
+            # Guest Mode
+            df = df[df['type'] == 'Run'].head(50).copy()
+            df = sync_detailed_activities(df, st.session_state.access_token, use_cache=False)
+            st.toast("Guest Mode: Dynamically fetched your 50 most recent detailed runs.", icon="👋")
+
+        # Save the fully enriched dataframe to session state
+        st.session_state.strava_data = df
+
+else:
+    # If the data is already in session state, load it instantly without hitting the API
+    df = st.session_state.strava_data
 
 # Main page content
-stats = process_summary_stats(df) 
+stats = process_summary_stats(df)
 # --- Section 1: Running Focus ---
 st.markdown("### 🏃‍♀️ Year-to-Date Running")
 
@@ -143,8 +151,6 @@ with st.container(border=True):
         # Bonus fun metric
         st.metric("Total Vert Climbed", f"{stats['total_vert_ft']:,.0f} ft")
 
-import pandas as pd
-from streamlit_calendar import calendar
 
 st.markdown("### 📅 Activity Log")
 
