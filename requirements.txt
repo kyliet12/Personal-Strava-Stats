@@ -1,0 +1,9 @@
+streamlit
+pandas
+requests
+reverse_geocoder
+polyline
+folium
+streamlit-folium
+plotly
+streamlit-calendar
