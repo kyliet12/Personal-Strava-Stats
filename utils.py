@@ -1,5 +1,5 @@
 from datetime import datetime
-import reverse_geocoder as rg
+# import reverse_geocoder as rg
 import polyline
 import streamlit as st
 import requests
@@ -65,43 +65,43 @@ def fetch_activities(access_token):
 
     return all_activities
 
-@st.cache_data
-def get_city_from_coords(df):
-    """Uses reverse_geocoder to reverse geocode coordinates into a city name."""
-    # 1. Filter out activities that don't have valid starting coordinates
-    valid_coords_mask = df['start_latlng'].notna() & (df['start_latlng'].str.len() == 2)
+# @st.cache_data
+# def get_city_from_coords(df):
+#     """Uses reverse_geocoder to reverse geocode coordinates into a city name."""
+#     # 1. Filter out activities that don't have valid starting coordinates
+#     valid_coords_mask = df['start_latlng'].notna() & (df['start_latlng'].str.len() == 2)
     
-    # If no valid coordinates exist, just return the dataframe
-    if not valid_coords_mask.any():
-        df['start_city'] = "Unknown Location"
-        return df
+#     # If no valid coordinates exist, just return the dataframe
+#     if not valid_coords_mask.any():
+#         df['start_city'] = "Unknown Location"
+#         return df
         
-    # 2. Extract all valid coordinates into a list of tuples: [(lat1, lon1), (lat2, lon2), ...]
-    coords_list = df.loc[valid_coords_mask, 'start_latlng'].apply(tuple).tolist()
+#     # 2. Extract all valid coordinates into a list of tuples: [(lat1, lon1), (lat2, lon2), ...]
+#     coords_list = df.loc[valid_coords_mask, 'start_latlng'].apply(tuple).tolist()
     
-    # 3. Batch reverse-geocode explicitly in single-threaded mode
-    # Bypassing rg.search() avoids the multiprocessing caching bug
-    geocoder = rg.RGeocoder(mode=1, verbose=False)
-    results = geocoder.query(coords_list)
-    
-    # 4. Format the results into "City, State"
-    formatted_cities = []
-    for res in results:
-        city = res.get('name', 'Unknown')
-        state = res.get('admin1', '') # admin1 usually represents the state/province
+#     # 3. Batch reverse-geocode explicitly in single-threaded mode
+#     # Bypassing rg.search() avoids the multiprocessing caching bug
+#     geocoder = rg.RGeocoder(mode=1, verbose=False)
+#     results = geocoder.query(coords_list)
+
+#     # 4. Format the results into "City, State"
+#     formatted_cities = []
+#     for res in results:
+#         city = res.get('name', 'Unknown')
+#         state = res.get('admin1', '') # admin1 usually represents the state/province
         
-        if state:
-            formatted_cities.append(f"{city}, {state}")
-        else:
-            formatted_cities.append(city)
+#         if state:
+#             formatted_cities.append(f"{city}, {state}")
+#         else:
+#             formatted_cities.append(city)
             
-    # 5. Assign the results back to the dataframe
-    # Initialize the column with defaults first
-    df['start_city'] = "Unknown Location" 
-    # Map the formatted cities only to the rows that had valid coordinates
-    df.loc[valid_coords_mask, 'start_city'] = formatted_cities
+#     # 5. Assign the results back to the dataframe
+#     # Initialize the column with defaults first
+#     df['start_city'] = "Unknown Location" 
+#     # Map the formatted cities only to the rows that had valid coordinates
+#     df.loc[valid_coords_mask, 'start_city'] = formatted_cities
     
-    return df
+#     return df
 
 
 def clean_activities(df):
@@ -144,7 +144,7 @@ def clean_activities(df):
     # df['summary_polyline'] = df['map'].str.get('summary_polyline')
     # decode polyline
     df['summary_polyline'] = df['summary_polyline'].apply(polyline.decode) 
-    df = get_city_from_coords(df)
+    # df = get_city_from_coords(df)
     # filter to current year
     df = df[df['start_year'] == datetime.now().year]
 
@@ -187,6 +187,9 @@ def process_summary_stats(df):
     # 7. Bonus: Total Elevation (All activities)
     total_vert_ft = df['elevation_gain_ft'].sum() if 'elevation_gain_ft' in df.columns else 0
 
+    # 8. Total Unique Activities
+    unique_activities = df['type'].nunique() if 'type' in df.columns else 0
+
     return {
         "days_run": days_run,
         "ytd_run_miles": ytd_run_miles,
@@ -195,7 +198,8 @@ def process_summary_stats(df):
         "total_bike_rides": total_bike_rides,
         "total_bike_miles": total_bike_miles,
         "cities_count": cities_count,
-        "total_vert_ft": total_vert_ft
+        "total_vert_ft": total_vert_ft,
+        "unique_activities": unique_activities
     }
 
 def classify_and_extract(row: pd.Series, long_run_thresh: float = 6.5, aerobic_thresh_decimal: float = 8.25) -> dict:

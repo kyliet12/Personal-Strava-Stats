@@ -139,14 +139,11 @@ with st.container(border=True):
     r2_col1, r2_col2, r2_col3 = st.columns(3)
     
     with r2_col1:
-        st.metric("Lifetime Bike Rides", f"{stats['total_bike_rides']}", 
+        st.metric("Active Modalities", f"{stats['unique_activities']:.0f} Sports")    
+    with r2_col2:
+        st.metric("YTD Bike Rides", f"{stats['total_bike_rides']}", 
                     delta=f"{stats['total_bike_miles']:,.0f} miles total", 
                     delta_color="off") # 'off' makes the delta grey instead of green/red
-    
-    with r2_col2:
-        # The cities metric
-        st.metric("Cities Explored", f"{stats['cities_count']}", help="Unique cities or timezones you've logged activities in.")
-    
     with r2_col3:
         # Bonus fun metric
         st.metric("Total Vert Climbed", f"{stats['total_vert_ft']:,.0f} ft")
